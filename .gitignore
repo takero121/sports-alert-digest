@@ -37,6 +37,10 @@ yarn-error.log*
 # runtime digest data
 /data/store.json
 
+# generated / local artifacts
+/output/
+.env.secrets.generated
+
 # vercel
 .vercel
 
