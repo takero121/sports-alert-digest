@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { getDigestArticles, markSlackDigestSent, usingRedis } from "@/lib/store";
+import {
+  getDigestArticles,
+  markSlackDigestSent,
+  saveArticleSummaries,
+  usingRedis,
+} from "@/lib/store";
 import { isSlackConfigured, sendDigestToSlack } from "@/lib/slack";
+import { enrichArticlesWithSourceSummaries } from "@/lib/summarize-article";
+import { buildShareText } from "@/lib/share-text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,19 +46,36 @@ export async function GET(request: Request) {
     );
   }
 
-  const articles = await getDigestArticles();
-  if (articles.length === 0) {
+  const baseArticles = await getDigestArticles();
+  if (baseArticles.length === 0) {
     return NextResponse.json({ ok: true, sent: false, message: "No articles to send" });
   }
+
+  // 元記事を取得して要約してから Slack へ投稿
+  const articles = await enrichArticlesWithSourceSummaries(baseArticles);
+  for (const article of articles) {
+    article.shareText = buildShareText(article);
+  }
+
+  await saveArticleSummaries(
+    articles.map((a) => ({
+      id: a.id,
+      summary: a.summary,
+      summarizedFromArticle: a.summarizedFromArticle,
+    })),
+  );
 
   const dateLabel = format(new Date(), "M月d日", { locale: ja });
   await sendDigestToSlack(articles, dateLabel);
   await markSlackDigestSent();
 
+  const fromArticle = articles.filter((a) => a.summarizedFromArticle).length;
+
   return NextResponse.json({
     ok: true,
     sent: true,
     count: articles.length,
+    summarizedFromArticle: fromArticle,
     ids: articles.map((a) => a.id),
   });
 }

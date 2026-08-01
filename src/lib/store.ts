@@ -216,6 +216,23 @@ export async function markPostedToX(id: string): Promise<Article | null> {
   return article;
 }
 
+export async function saveArticleSummaries(
+  updates: Array<Pick<Article, "id" | "summary" | "summarizedFromArticle">>,
+): Promise<void> {
+  if (!updates.length) return;
+  const store = await readStore();
+  const byId = new Map(updates.map((u) => [u.id, u]));
+  for (const article of store.articles) {
+    const patch = byId.get(article.id);
+    if (!patch) continue;
+    article.summary = patch.summary;
+    article.summarizedFromArticle = patch.summarizedFromArticle;
+    article.shareText = buildShareText(article);
+  }
+  store.updatedAt = new Date().toISOString();
+  await writeStore(store);
+}
+
 export async function markSlackDigestSent(): Promise<void> {
   const store = await readStore();
   store.lastSlackDigestAt = new Date().toISOString();

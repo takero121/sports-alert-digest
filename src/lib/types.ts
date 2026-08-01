@@ -10,6 +10,8 @@ export type Article = {
   tags: string[];
   shareText: string;
   postedToXAt?: string | null;
+  /** 元記事本文を読んで作った要約なら true */
+  summarizedFromArticle?: boolean;
 };
 
 export type DigestStore = {
