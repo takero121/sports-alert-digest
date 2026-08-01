@@ -147,11 +147,16 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
     const url = normalizeUrl(item.url);
     if (!item.title || !url || existingUrls.has(url)) continue;
 
+    const snippet = String(item.snippet || item.title)
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
     const enriched = enrichArticle(
       {
         title: item.title,
         url,
-        snippet: item.snippet || item.title,
+        snippet: snippet || item.title,
         source: item.source || "unknown",
       },
       alertQuery,
@@ -221,17 +226,21 @@ export async function markSlackDigestSent(): Promise<void> {
 const DEFAULT_DIGEST_LIMIT = 30;
 
 /**
- * 直近24時間に取得した記事を返す（スコア順・既定30件）。
- * 24時間以内が0件なら、保存済み記事から同数まで返す。
+ * Slack通知用に最大30件を返す。
+ * 直近7日分を優先し、足りなければ保存済み全体から新しい順で補充する。
  */
 export async function getDigestArticles(limit = DEFAULT_DIGEST_LIMIT): Promise<Article[]> {
   const store = await readStore();
-  const since = Date.now() - 24 * 60 * 60 * 1000;
+  const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recent = store.articles.filter((a) => +new Date(a.receivedAt) >= since);
-  const pool = recent.length > 0 ? recent : store.articles;
-  return [...pool]
-    .sort((a, b) => b.score - a.score || +new Date(b.receivedAt) - +new Date(a.receivedAt))
-    .slice(0, limit);
+  const recentIds = new Set(recent.map((a) => a.id));
+  const older = store.articles.filter((a) => !recentIds.has(a.id));
+
+  const byFreshness = (a: Article, b: Article) =>
+    +new Date(b.receivedAt) - +new Date(a.receivedAt) || b.score - a.score;
+
+  const pool = [...recent.sort(byFreshness), ...older.sort(byFreshness)];
+  return pool.slice(0, limit);
 }
 
 export async function resetToSeed(): Promise<DigestStore> {

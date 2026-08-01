@@ -3,8 +3,8 @@ import type { Article } from "./types";
 import { SERVICE_NAME, X_HANDLE } from "./keywords";
 import { buildSlackArticleText } from "./share-text";
 
-/** Slack Block Kit は1メッセージ最大50ブロック。記事ごとに約3ブロック使う */
-const ARTICLES_PER_MESSAGE = 12;
+/** Slack Block Kit は1メッセージ最大50ブロック。要約全文のため件数は控えめに分割 */
+const ARTICLES_PER_MESSAGE = 8;
 
 export function isSlackConfigured(): boolean {
   return Boolean(process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID);

@@ -97,12 +97,24 @@ function scoreArticle(article: ParsedAlertArticle, alertQuery: string): number {
 
 export function buildSummary(article: ParsedAlertArticle, alertQuery: string): string {
   // Slack では全文を出すので、アラート本文は長めに保持する
-  const base = (article.snippet || article.title).trim();
-  const compact = base.length > 800 ? `${base.slice(0, 797)}…` : base;
+  const base = sanitizeSnippet(article.snippet || article.title);
+  const compact = base.length > 1200 ? `${base.slice(0, 1197)}…` : base;
   const tags = detectTags(`${article.title} ${article.snippet} ${alertQuery}`);
   const why =
     tags.length > 0 ? `注目点: ${tags.join(" / ")}` : "スポーツ関連の注目ニュース";
   return `${compact}（${why}）`;
+}
+
+function sanitizeSnippet(text: string): string {
+  return String(text || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function enrichArticle(

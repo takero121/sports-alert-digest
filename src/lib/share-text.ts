@@ -4,7 +4,7 @@ import { SERVICE_NAME } from "./keywords";
 const SERVICE_TAG = `#${SERVICE_NAME.replace(/\s+/g, "")}`;
 
 /** Slack section の上限に余裕を持たせる */
-const SLACK_TEXT_MAX = 2800;
+const SLACK_TEXT_MAX = 2900;
 
 /** X投稿用の短文 */
 export function buildShareText(article: Pick<Article, "title" | "summary" | "url" | "tags">): string {
@@ -15,7 +15,7 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
   return [
     `【${SERVICE_NAME}】${article.title}`,
     "",
-    trimText(cleanSummary(article.summary), 110),
+    trimText(plainText(article.summary), 110),
     "",
     article.url,
     "",
@@ -25,6 +25,7 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
 
 /**
  * Slack掲載用テキスト（見出し + 要約全文 + ハッシュタグ）
+ * ※文字数カットは Slack 上限近くのみ。要約は原則そのまま出す。
  */
 export function buildSlackArticleText(
   article: Pick<Article, "title" | "summary" | "url" | "tags">,
@@ -33,20 +34,26 @@ export function buildSlackArticleText(
     ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
     : "#スポーツ";
   const hashtags = `${tags} ${SERVICE_TAG}`;
-  const summary = cleanSummary(article.summary) || article.title;
+  const title = plainText(article.title);
+  const summary = plainText(article.summary) || title;
 
   let text = [
-    `【${article.title.trim()}】`,
+    `*【${title}】*`,
     "",
     summary,
     "",
     hashtags,
     "",
-    article.url,
+    `<${article.url}|記事を読む>`,
   ].join("\n");
 
   if ([...text].length > SLACK_TEXT_MAX) {
-    text = `${[...text].slice(0, SLACK_TEXT_MAX - 1).join("")}…`;
+    // ハッシュタグとURLは残し、要約側だけ収める
+    const footer = `\n\n${hashtags}\n\n<${article.url}|記事を読む>`;
+    const header = `*【${title}】*\n\n`;
+    const budget = SLACK_TEXT_MAX - [...header].length - [...footer].length - 1;
+    const clipped = trimText(summary, Math.max(80, budget));
+    text = `${header}${clipped}${footer}`;
   }
   return text;
 }
@@ -63,12 +70,20 @@ export function buildDigestShareText(articles: Article[], dateLabel: string): st
   ].join("\n");
 }
 
-function cleanSummary(text: string): string {
-  return text.replace(/（注目点:.*?）$/, "").trim();
+function plainText(text: string): string {
+  return String(text || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function trimText(text: string, max: number): string {
-  const cleaned = text.trim();
+  const cleaned = plainText(text);
   const chars = [...cleaned];
   if (chars.length <= max) return cleaned;
   return `${chars.slice(0, Math.max(1, max - 1)).join("")}…`;
