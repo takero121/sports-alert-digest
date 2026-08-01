@@ -96,8 +96,9 @@ function scoreArticle(article: ParsedAlertArticle, alertQuery: string): number {
 }
 
 export function buildSummary(article: ParsedAlertArticle, alertQuery: string): string {
-  const base = article.snippet || article.title;
-  const compact = base.length > 120 ? `${base.slice(0, 117)}…` : base;
+  // Slack では全文を出すので、アラート本文は長めに保持する
+  const base = (article.snippet || article.title).trim();
+  const compact = base.length > 800 ? `${base.slice(0, 797)}…` : base;
   const tags = detectTags(`${article.title} ${article.snippet} ${alertQuery}`);
   const why =
     tags.length > 0 ? `注目点: ${tags.join(" / ")}` : "スポーツ関連の注目ニュース";

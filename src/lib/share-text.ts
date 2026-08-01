@@ -3,6 +3,9 @@ import { SERVICE_NAME } from "./keywords";
 
 const SERVICE_TAG = `#${SERVICE_NAME.replace(/\s+/g, "")}`;
 
+/** Slack section の上限に余裕を持たせる */
+const SLACK_TEXT_MAX = 2800;
+
 /** X投稿用の短文 */
 export function buildShareText(article: Pick<Article, "title" | "summary" | "url" | "tags">): string {
   const tagLine = article.tags.length
@@ -21,7 +24,7 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
 }
 
 /**
- * Slack掲載用テキスト（見出し・要約・ハッシュタグで 200〜300 文字）
+ * Slack掲載用テキスト（見出し + 要約全文 + ハッシュタグ）
  */
 export function buildSlackArticleText(
   article: Pick<Article, "title" | "summary" | "url" | "tags">,
@@ -30,42 +33,20 @@ export function buildSlackArticleText(
     ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
     : "#スポーツ";
   const hashtags = `${tags} ${SERVICE_TAG}`;
-  const footer = `\n\n${hashtags}\n\n${article.url}`;
-  const footerLen = [...footer].length;
+  const summary = cleanSummary(article.summary) || article.title;
 
-  const minBody = Math.max(40, 200 - footerLen);
-  const maxBody = Math.max(minBody, 300 - footerLen);
+  let text = [
+    `【${article.title.trim()}】`,
+    "",
+    summary,
+    "",
+    hashtags,
+    "",
+    article.url,
+  ].join("\n");
 
-  let title = article.title.trim();
-  let summary = cleanSummary(article.summary);
-
-  const buildBody = (t: string, s: string) => `【${t}】\n\n${s}`;
-
-  // まず要約を調整して 200〜300 に収める
-  let body = buildBody(title, summary);
-  let bodyLen = [...body].length;
-
-  if (bodyLen > maxBody) {
-    const titleBudget = Math.min([...title].length, Math.floor(maxBody * 0.35));
-    title = trimText(title, Math.max(12, titleBudget));
-    const used = [...buildBody(title, "")].length;
-    summary = trimText(summary, Math.max(40, maxBody - used));
-    body = buildBody(title, summary);
-  } else if (bodyLen < minBody) {
-    // 短すぎる場合は要約をできるだけ使う（元文が短ければその長さで許容）
-    summary = cleanSummary(article.summary) || title;
-    body = buildBody(title, summary);
-    if ([...body].length > maxBody) {
-      const used = [...buildBody(title, "")].length;
-      summary = trimText(summary, Math.max(40, maxBody - used));
-      body = buildBody(title, summary);
-    }
-  }
-
-  let text = `${body}${footer}`;
-  const len = [...text].length;
-  if (len > 300) {
-    text = `${[...text].slice(0, 299).join("")}…`;
+  if ([...text].length > SLACK_TEXT_MAX) {
+    text = `${[...text].slice(0, SLACK_TEXT_MAX - 1).join("")}…`;
   }
   return text;
 }

@@ -12,7 +12,10 @@
  *   3. createMorningTrigger を実行
  */
 
-var ALERT_QUERY = 'from:googlealerts-noreply@google.com is:unread';
+var ALERT_QUERY_UNREAD = 'from:googlealerts-noreply@google.com is:unread';
+var ALERT_QUERY_RECENT = 'from:googlealerts-noreply@google.com newer_than:7d';
+var TARGET_ARTICLES = 30;
+var MAX_THREADS = 50;
 
 /* ========== 初回セットアップ ========== */
 
@@ -70,9 +73,30 @@ function syncGoogleAlerts() {
   var articles = [];
   var seen = {};
 
-  GmailApp.search(ALERT_QUERY, 0, 25).forEach(function (thread) {
+  // 1) 未読を優先取得
+  collectFromSearch_(ALERT_QUERY_UNREAD, articles, seen, true);
+
+  // 2) 足りなければ直近7日分からも補充（約30件を目指す）
+  if (articles.length < TARGET_ARTICLES) {
+    collectFromSearch_(ALERT_QUERY_RECENT, articles, seen, false);
+  }
+
+  if (articles.length > TARGET_ARTICLES) {
+    articles = articles.slice(0, TARGET_ARTICLES);
+  }
+
+  if (articles.length) forwardToIngest_(articles);
+  console.log('sync done. added=' + articles.length + ' (target=' + TARGET_ARTICLES + ')');
+  return articles.length;
+}
+
+function collectFromSearch_(query, articles, seen, markRead) {
+  GmailApp.search(query, 0, MAX_THREADS).forEach(function (thread) {
+    if (articles.length >= TARGET_ARTICLES) return;
+
     thread.getMessages().forEach(function (message) {
-      if (!message.isUnread()) return;
+      if (articles.length >= TARGET_ARTICLES) return;
+      if (markRead && !message.isUnread()) return;
 
       var subject = message.getSubject() || '';
       if (subject.indexOf('Google') === -1 &&
@@ -85,6 +109,7 @@ function syncGoogleAlerts() {
       var parsed = parseGoogleAlert_(message.getBody() || '', message.getPlainBody() || '');
 
       parsed.forEach(function (item) {
+        if (articles.length >= TARGET_ARTICLES) return;
         var url = normalizeUrl_(item.url);
         if (!url || !item.title || seen[url]) return;
         seen[url] = true;
@@ -97,13 +122,9 @@ function syncGoogleAlerts() {
         });
       });
 
-      message.markRead();
+      if (markRead) message.markRead();
     });
   });
-
-  if (articles.length) forwardToIngest_(articles);
-  console.log('sync done. added=' + articles.length);
-  return articles.length;
 }
 
 function notifySlackDigest_() {
@@ -184,8 +205,8 @@ function parseGoogleAlert_(html, text) {
       if (/google\.com\/alerts/i.test(url)) continue;
       if (seen[url]) continue;
 
-      var after = html.slice(match.index + match[0].length, match.index + match[0].length + 500);
-      var snippet = clean_(stripTags_(after)).slice(0, 180) || title;
+      var after = html.slice(match.index + match[0].length, match.index + match[0].length + 1200);
+      var snippet = clean_(stripTags_(after)).slice(0, 800) || title;
       var source = 'unknown';
       try {
         source = url.match(/^https?:\/\/([^\/]+)/)[1].replace(/^www\./, '');
@@ -193,7 +214,7 @@ function parseGoogleAlert_(html, text) {
 
       seen[url] = true;
       articles.push({ title: title, url: url, snippet: snippet, source: source });
-      if (articles.length >= 30) break;
+      if (articles.length >= TARGET_ARTICLES) break;
     }
   }
 

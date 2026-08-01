@@ -218,19 +218,20 @@ export async function markSlackDigestSent(): Promise<void> {
   await writeStore(store);
 }
 
+const DEFAULT_DIGEST_LIMIT = 30;
+
 /**
- * 直近24時間に取得した記事をすべて返す（スコア順）。
- * 24時間以内が0件なら、保存済み記事をすべて返す。
+ * 直近24時間に取得した記事を返す（スコア順・既定30件）。
+ * 24時間以内が0件なら、保存済み記事から同数まで返す。
  */
-export async function getDigestArticles(limit?: number): Promise<Article[]> {
+export async function getDigestArticles(limit = DEFAULT_DIGEST_LIMIT): Promise<Article[]> {
   const store = await readStore();
   const since = Date.now() - 24 * 60 * 60 * 1000;
   const recent = store.articles.filter((a) => +new Date(a.receivedAt) >= since);
   const pool = recent.length > 0 ? recent : store.articles;
-  const sorted = [...pool].sort(
-    (a, b) => b.score - a.score || +new Date(b.receivedAt) - +new Date(a.receivedAt),
-  );
-  return typeof limit === "number" ? sorted.slice(0, limit) : sorted;
+  return [...pool]
+    .sort((a, b) => b.score - a.score || +new Date(b.receivedAt) - +new Date(a.receivedAt))
+    .slice(0, limit);
 }
 
 export async function resetToSeed(): Promise<DigestStore> {
