@@ -42,7 +42,7 @@ function articleBlocks(article: Article, index: number) {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: buildSlackTitleLine(index, article.title),
+        text: buildSlackTitleLine(index, article.title, article.source),
       },
     },
     {

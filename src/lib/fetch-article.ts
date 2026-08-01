@@ -224,20 +224,109 @@ function extractPageTitle($: ReturnType<typeof cheerio.load>): string | null {
   return null;
 }
 
-/** 見出し末尾の媒体名（| PR TIMES 等）を除く */
-export function stripMediaSuffix(title: string): string {
+/** 見出し・本文から除く媒体名（表記ゆれ含む） */
+const MEDIA_OUTLET_PATTERN =
+  /(?:PR[\s-]?TIMES|Yahoo!?ニュース|Yahoo!?ファイナンス|Yahoo!|エキサイト(?:ニュース)?|excite(?:ニュース)?|innovaTopia|Innovatopia|イノベートピア|時事通信|共同通信|ロイター(?:通信)?|Bloomberg|日本経済新聞|日経(?:新聞|電子版|COMPASS)?|NIKKEI(?:\s*COMPASS)?|朝日新聞|毎日新聞|読売新聞|産経新聞|スポーツ報知|日刊スポーツ|サンスポ|スポニチ|スポーツ\s*マニア|スポーツマニア|Number Web|Sportsnavi|スポーツナビ|AFPBB|CNET|ITmedia|TechCrunch|BRIDGE|NewsPicks|東洋経済|ダイヤモンド|Forbes|Impress|マイナビニュース|レスポンス|スマートニュース|SmartNews|HashHub(?:\s*Research)?|あたらしい経済|ANIMAGIC\s*DAO|公募ガイド|福島民友(?:新聞社)?|トレーダーズ[・･]?ウェブ|ベンチャーズクエア|벤처스퀘어|公式サイト|プレスリリース)/iu;
+
+/** 見出し末尾の媒体名（| PR TIMES / - エキサイト / - innovaTopia 等）を除く */
+export function stripMediaSuffix(title: string, source = ""): string {
   let t = clean(title);
-  // 「タイトル | 媒体」「タイトル｜媒体」「タイトル - 媒体名」
-  t = t.replace(
-    /\s*[|｜]\s*[^|｜]{1,48}$/u,
-    "",
-  );
-  t = t.replace(
-    /\s*[-–—―]\s*(?:PR[\s-]?TIMES|Yahoo!?ニュース|Yahoo!|excite(?:ニュース)?|時事通信|共同通信|ロイター|Bloomberg|ロイター通信|日経(?:新聞|電子版)?|朝日新聞|毎日新聞|読売新聞|産経新聞|スポーツ報知|日刊スポーツ|サンスポ|スポニチ|Number Web|Sportsnavi|スポーツナビ|AFPBB|CNET|ITmedia|TechCrunch|BRIDGE|NewsPicks|東洋経済|ダイヤモンド|Forbes|Impress|マイナビニュース|レスポンス|四谷大塚|公式サイト|プレスリリース)(?:\.[a-z.]+)?\s*$/iu,
-    "",
-  );
+
+  // 「タイトル | 媒体」「タイトル｜媒体」は媒体側を全部落とす
+  t = t.replace(/\s*[|｜]\s*[^|｜]{1,60}$/u, "");
+
+  // 「タイトル - 媒体名」（既知媒体）
+  t = t.replace(new RegExp(`\\s*[-–—―]\\s*${MEDIA_OUTLET_PATTERN.source}\\s*$`, "iu"), "");
+
+  // 「タイトル(媒体)」「タイトル（媒体）」
+  t = t.replace(new RegExp(`[（(]\\s*${MEDIA_OUTLET_PATTERN.source}\\s*[）)]\\s*$`, "iu"), "");
   t = t.replace(/\s*[【\[](?:PR|広告|プレスリリース)[】\]]\s*$/iu, "");
+
+  // source（hostname 等）由来の末尾ブランドも落とす
+  for (const brand of sourceBrands(source)) {
+    const escaped = escapeRegExp(brand);
+    t = t.replace(new RegExp(`\\s*[-–—―|｜]\\s*${escaped}\\s*$`, "iu"), "");
+    t = t.replace(new RegExp(`[（(]\\s*${escaped}\\s*[）)]\\s*$`, "iu"), "");
+  }
+
+  // ヒューリスティック: 「 - 短い固有名」は媒体サフィックスとみなす
+  // （動詞っぽい語が無く、カタカナ/英字/メディア語尾が多いとき）
+  t = t.replace(/\s*[-–—―]\s*([^\s。！？]{2,40})\s*$/u, (full, media: string) => {
+    return looksLikeMediaLabel(media) ? "" : full;
+  });
+  t = t.replace(/[（(]\s*([^）)]{2,30})\s*[）)]\s*$/u, (full, media: string) => {
+    return looksLikeMediaLabel(media) ? "" : full;
+  });
+
   return clean(t);
+}
+
+/** 要約先頭や文中の媒体クレジットを落とす */
+export function stripMediaLabels(text: string, source = ""): string {
+  let s = clean(text);
+  // 先頭の媒体名（「エキサイト ○○は」「PR TIMES ○○」）
+  s = s.replace(new RegExp(`^${MEDIA_OUTLET_PATTERN.source}\\s*[:：]?\\s*`, "iu"), "");
+  for (const brand of sourceBrands(source)) {
+    s = s.replace(new RegExp(`^${escapeRegExp(brand)}\\s*[:：]?\\s*`, "iu"), "");
+  }
+  // 「○○によると」「○○が報じた」
+  s = s.replace(
+    new RegExp(`${MEDIA_OUTLET_PATTERN.source}(?:によると|が報じた|の報道によると|の報道では)`, "giu"),
+    "",
+  );
+  s = s.replace(new RegExp(`[（(]\\s*${MEDIA_OUTLET_PATTERN.source}\\s*[）)]`, "giu"), "");
+  return clean(s);
+}
+
+function sourceBrands(source: string): string[] {
+  const raw = clean(source);
+  if (!raw || raw === "unknown") return [];
+  const host = raw
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0];
+  const base = host.split(".")[0] || host;
+  const brands = new Set<string>([raw, host, base]);
+  // excite.co.jp → エキサイト も候補に
+  if (/^excite$/i.test(base)) brands.add("エキサイト");
+  if (/^innovatopia$/i.test(base)) {
+    brands.add("innovaTopia");
+    brands.add("Innovatopia");
+  }
+  if (/^prtimes$/i.test(base)) brands.add("PR TIMES");
+  if (/yahoo/i.test(host)) {
+    brands.add("Yahoo!ニュース");
+    brands.add("Yahoo!ファイナンス");
+  }
+  return [...brands].filter((b) => b.length >= 3);
+}
+
+function looksLikeMediaLabel(media: string): boolean {
+  const m = clean(media);
+  if (!m || m.length > 40) return false;
+  if (MEDIA_OUTLET_PATTERN.test(m)) return true;
+  if (/[。！？]/.test(m)) return false;
+  // ニュース本文っぽい動詞が入っていたら媒体名ではない
+  if (
+    /発表|調達|提携|導入|開始|出資|契約|開設|決定|実施|提供|開催|設立|買収|発売|開始し|結び|受け/.test(
+      m,
+    )
+  ) {
+    return false;
+  }
+  if (/(?:新聞|ニュース|通信|タイムズ|マニア|ガイド|Research|COMPASS|DAO|Web|ウェブ)$/i.test(m)) {
+    return true;
+  }
+  // カタカナ・英字・数字・記号中心の短いラベル
+  const compact = m.replace(/[\s・･&.]/g, "");
+  const mediaChars = compact.replace(/[A-Za-z0-9ぁ-んァ-ヶー一-龥]/g, "");
+  if (mediaChars.length > 0) return false;
+  const katakanaLatin = compact.replace(/[^A-Za-zァ-ヶー0-9]/g, "");
+  return katakanaLatin.length >= 3 && katakanaLatin.length / compact.length >= 0.7;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function relevanceScore(text: string, title: string): number {

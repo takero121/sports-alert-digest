@@ -1,5 +1,9 @@
 import type { Article } from "./types";
-import { fetchArticleContent, stripMediaSuffix } from "./fetch-article";
+import {
+  fetchArticleContent,
+  stripMediaLabels,
+  stripMediaSuffix,
+} from "./fetch-article";
 
 const CONCURRENCY = 4;
 const TARGET_CHARS = 300;
@@ -12,7 +16,7 @@ export async function summarizeFromSource(article: Article): Promise<{
   fromArticle: boolean;
   title: string;
 }> {
-  const baseTitle = stripMediaSuffix(plain(article.title));
+  const baseTitle = stripMediaSuffix(plain(article.title), article.source);
 
   // OpenAI 未設定時のみ、既存の元記事要約を再利用する
   if (
@@ -30,7 +34,7 @@ export async function summarizeFromSource(article: Article): Promise<{
 
   const fetched = await fetchArticleContent(article.url, baseTitle);
   const text = fetched.text;
-  const title = resolveFullTitle(baseTitle, fetched.pageTitle);
+  const title = resolveFullTitle(baseTitle, fetched.pageTitle, article.source);
   const hasBody = Boolean(text && text.length >= 120);
   // アラート元抜粋を優先。無いときだけ既存 summary を使う（弱い文言は除外）
   const snippet = cleanSnippet(
@@ -319,9 +323,13 @@ function fallbackFromTitle(
 }
 
 /** アラート見出しが途切れているとき、ページ見出しで補完する */
-function resolveFullTitle(alertTitle: string, pageTitle: string | null): string {
-  const alert = stripMediaSuffix(plain(alertTitle));
-  const page = pageTitle ? stripMediaSuffix(plain(pageTitle)) : "";
+function resolveFullTitle(
+  alertTitle: string,
+  pageTitle: string | null,
+  source = "",
+): string {
+  const alert = stripMediaSuffix(plain(alertTitle), source);
+  const page = pageTitle ? stripMediaSuffix(plain(pageTitle), source) : "";
 
   if (!page) return alert;
   if (page === alert) return alert;
@@ -353,7 +361,7 @@ function titleOverlap(a: string, b: string): number {
 }
 
 function sanitizeSummary(summary: string): string {
-  let s = summary.replace(/\s+/g, " ").trim();
+  let s = stripMediaLabels(summary.replace(/\s+/g, " ").trim());
   s = s
     .replace(/https?:\/\/\S+/g, "")
     .replace(/■[^。！？]*：?\s*/g, "")
@@ -366,11 +374,6 @@ function sanitizeSummary(summary: string): string {
     .replace(/\(以下[^)]*\)/g, "")
     .replace(/（本社：[^）]*）/g, "")
     .replace(/（代表取締役[^）]*）/g, "")
-    .replace(/（(?:PR[\s-]?TIMES|Yahoo!?ニュース|時事通信|共同通信|ロイター)）/gi, "")
-    .replace(
-      /(?:PR[\s-]?TIMES|Yahoo!?ニュース|excite(?:ニュース)?|時事通信|共同通信|ロイター|日経(?:新聞)?|朝日新聞|毎日新聞|読売新聞|産経新聞|日刊スポーツ|スポーツ報知)(?:によると|が報じた|の報道によると|の報道では)/gi,
-      "",
-    )
     .replace(/実施いたします/g, "行いました")
     .replace(/推進して参ります/g, "進めています")
     .replace(/して参ります/g, "していきます")

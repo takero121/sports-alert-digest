@@ -1,6 +1,6 @@
 import type { Article } from "./types";
 import { SERVICE_NAME } from "./keywords";
-import { stripMediaSuffix } from "./fetch-article";
+import { stripMediaLabels, stripMediaSuffix } from "./fetch-article";
 
 const SERVICE_TAG = `#${SERVICE_NAME.replace(/\s+/g, "")}`;
 
@@ -8,16 +8,20 @@ type SummaryInput = Pick<Article, "title" | "summary" | "tags"> &
   Partial<Pick<Article, "source" | "alertQuery" | "summarizedFromArticle">>;
 
 /** X投稿用の短文（文字数制限があるため要約のみ短縮。見出しは全文） */
-export function buildShareText(article: Pick<Article, "title" | "summary" | "url" | "tags">): string {
+export function buildShareText(
+  article: Pick<Article, "title" | "summary" | "url" | "tags"> &
+    Partial<Pick<Article, "source">>,
+): string {
   const tagLine = article.tags.length
     ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
     : "#スポーツ";
-  const title = displayTitle(article.title);
+  const title = displayTitle(article.title, article.source);
+  const summary = stripMediaLabels(plainText(article.summary), article.source);
 
   return [
     `【${SERVICE_NAME}】${title}`,
     "",
-    trimAtSentence(plainText(article.summary), 120),
+    trimAtSentence(summary, 120),
     "",
     article.url,
     "",
@@ -30,8 +34,8 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
  * 媒体名は出さない。途中切断しない。
  */
 export function buildSlackArticleText(article: SummaryInput & Pick<Article, "url">): string {
-  const title = displayTitle(article.title);
-  const cleaned = plainText(article.summary);
+  const title = displayTitle(article.title, article.source);
+  const cleaned = cleanSummaryBody(article);
   const body =
     (article.summarizedFromArticle || isUsableSummary(cleaned)) &&
     isUsableSummary(cleaned)
@@ -53,13 +57,17 @@ export function buildSlackArticleText(article: SummaryInput & Pick<Article, "url
 }
 
 /** Slack用: 見出しだけ（番号付き） */
-export function buildSlackTitleLine(index: number, title: string): string {
-  return `*${index + 1}. ${escapeMrkdwn(displayTitle(title))}*`;
+export function buildSlackTitleLine(
+  index: number,
+  title: string,
+  source = "",
+): string {
+  return `*${index + 1}. ${escapeMrkdwn(displayTitle(title, source))}*`;
 }
 
 /** Slack用: 本文・タグ・リンク（見出しなし） */
 export function buildSlackBodyText(article: SummaryInput & Pick<Article, "url">): string {
-  const cleaned = plainText(article.summary);
+  const cleaned = cleanSummaryBody(article);
   const body =
     (article.summarizedFromArticle || isUsableSummary(cleaned)) &&
     isUsableSummary(cleaned)
@@ -80,7 +88,7 @@ export function buildSlackBodyText(article: SummaryInput & Pick<Article, "url">)
 
 export function buildDigestShareText(articles: Article[], dateLabel: string): string {
   const top = articles.slice(0, 3);
-  const lines = top.map((a, i) => `${i + 1}. ${displayTitle(a.title)}`);
+  const lines = top.map((a, i) => `${i + 1}. ${displayTitle(a.title, a.source)}`);
   return [
     `【${SERVICE_NAME}】${dateLabel} のスポーツニュース`,
     "",
@@ -91,8 +99,8 @@ export function buildDigestShareText(articles: Article[], dateLabel: string): st
 }
 
 export function polishSummary(article: SummaryInput): string {
-  const title = displayTitle(article.title);
-  const body = plainText(article.summary);
+  const title = displayTitle(article.title, article.source);
+  const body = cleanSummaryBody(article);
   if (isUsableSummary(body)) {
     return body;
   }
@@ -101,12 +109,16 @@ export function polishSummary(article: SummaryInput): string {
 }
 
 /** 表示用見出し: 媒体名を除き、途切れ記号だけ落として全文を返す */
-export function displayTitle(title: string): string {
-  return stripMediaSuffix(plainText(title))
+export function displayTitle(title: string, source = ""): string {
+  return stripMediaSuffix(plainText(title), source)
     .replace(/\s*\.{2,}\s*$/, "")
     .replace(/\s*…\s*$/, "")
     .replace(/\s*･･･\s*$/, "")
     .trim();
+}
+
+function cleanSummaryBody(article: SummaryInput): string {
+  return stripMediaLabels(plainText(article.summary), article.source || "");
 }
 
 function isUsableSummary(body: string): boolean {

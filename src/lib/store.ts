@@ -153,7 +153,10 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
       .replace(/\s+/g, " ")
       .trim();
 
-    const title = stripMediaSuffix(String(item.title || "").trim());
+    const title = stripMediaSuffix(
+      String(item.title || "").trim(),
+      item.source || "",
+    );
     const enriched = enrichArticle(
       {
         title,
