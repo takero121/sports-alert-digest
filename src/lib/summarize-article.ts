@@ -8,25 +8,40 @@ export async function summarizeFromSource(article: Article): Promise<{
   summary: string;
   fromArticle: boolean;
 }> {
-  if (article.summarizedFromArticle && article.summary) {
+  // OpenAI 未設定時のみ、既存の元記事要約を再利用する
+  if (
+    !process.env.OPENAI_API_KEY &&
+    article.summarizedFromArticle &&
+    article.summary
+  ) {
     return { summary: article.summary, fromArticle: true };
   }
 
   const text = await fetchArticlePlainText(article.url);
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      // 本文が取れなくてもタイトル＋既存抜粋で要約を試みる
+      const sourceText =
+        text && text.length >= 80
+          ? text
+          : [article.title, article.summary].filter(Boolean).join("\n");
+      const summary = await summarizeWithOpenAI(
+        article.title,
+        sourceText,
+        article.tags,
+      );
+      if (summary) return { summary, fromArticle: Boolean(text && text.length >= 80) };
+    } catch {
+      // fall through
+    }
+  }
+
   if (!text || text.length < 80) {
     return {
       summary: fallbackFromTitle(article),
       fromArticle: false,
     };
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const summary = await summarizeWithOpenAI(article.title, text, article.tags);
-      if (summary) return { summary, fromArticle: true };
-    } catch {
-      // fall through to extractive
-    }
   }
 
   const summary = summarizeExtractive(article.title, text, article.tags);
