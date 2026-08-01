@@ -5,6 +5,7 @@ import type { Article, DigestStore, IngestPayload } from "./types";
 import { parseGoogleAlertEmail } from "./parse-google-alert";
 import { enrichArticle } from "./rank";
 import { stripMediaSuffix } from "./fetch-article";
+import { normalizeAlertQuery } from "./normalize-alert-query";
 import { buildShareText } from "./share-text";
 import { getRedis, STORE_KEY } from "./redis";
 
@@ -123,7 +124,7 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
     ? new Date(payload.emailDate).toISOString()
     : new Date().toISOString();
 
-  let alertQuery = payload.alertQuery || "スポーツ";
+  const fallbackQuery = payload.alertQuery || "スポーツ";
   let incoming = payload.articles || [];
 
   if (!incoming.length && (payload.html || payload.text)) {
@@ -132,17 +133,18 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
       text: payload.text,
       emailSubject: payload.emailSubject,
     });
-    alertQuery = payload.alertQuery || parsed.alertQuery;
     incoming = parsed.articles.map((a) => ({
       title: a.title,
       url: a.url,
       snippet: a.snippet,
       source: a.source,
+      alertQuery: payload.alertQuery || parsed.alertQuery,
     }));
   }
 
   const existingUrls = new Set(store.articles.map((a) => normalizeUrl(a.url)));
   let added = 0;
+  let lastAlertQuery = fallbackQuery;
 
   for (const item of incoming) {
     const url = normalizeUrl(item.url);
@@ -157,6 +159,13 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
       String(item.title || "").trim(),
       item.source || "",
     );
+    const alertQuery = normalizeAlertQuery(
+      item.alertQuery || fallbackQuery,
+      title,
+      snippet,
+    );
+    lastAlertQuery = alertQuery;
+
     const enriched = enrichArticle(
       {
         title,
@@ -196,15 +205,25 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
   store.lastIngestAt = new Date().toISOString();
   await writeStore(store);
 
-  return { added, total: store.articles.length, alertQuery };
+  return { added, total: store.articles.length, alertQuery: lastAlertQuery };
 }
 
 export async function listArticles(limit = 40): Promise<DigestStore & { articles: Article[] }> {
   const store = await readStore();
   return {
     ...store,
-    articles: store.articles.slice(0, limit),
+    articles: store.articles.slice(0, limit).map(withNormalizedAlertQuery),
   };
+}
+
+function withNormalizedAlertQuery(article: Article): Article {
+  const alertQuery = normalizeAlertQuery(
+    article.alertQuery,
+    article.title,
+    article.snippet || article.summary,
+  );
+  if (alertQuery === article.alertQuery) return article;
+  return { ...article, alertQuery };
 }
 
 export async function getArticle(id: string): Promise<Article | null> {
@@ -264,7 +283,7 @@ export async function getDigestArticles(limit = DEFAULT_DIGEST_LIMIT): Promise<A
     +new Date(b.receivedAt) - +new Date(a.receivedAt) || b.score - a.score;
 
   const pool = [...recent.sort(byFreshness), ...older.sort(byFreshness)];
-  return pool.slice(0, limit);
+  return pool.slice(0, limit).map(withNormalizedAlertQuery);
 }
 
 export async function resetToSeed(): Promise<DigestStore> {

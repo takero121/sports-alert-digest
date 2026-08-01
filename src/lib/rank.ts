@@ -36,6 +36,11 @@ const HIGH_IMPACT = [
   "SportsTech",
   "デジタルトランスフォーメーション",
   "DX",
+  "ベンチャーキャピタル",
+  "VC",
+  "エンターテインメント",
+  "エンタメ",
+  "スポーツビジネス",
 ];
 
 const DOMAIN_HINTS = [
@@ -64,9 +69,13 @@ function detectTags(text: string): string[] {
   if (/マーケティング|広告|ブランディング|ファンエンゲージ/.test(text)) {
     tags.add("マーケティング");
   }
-  if (/ビジネス|事業|収益|マネタイズ/.test(text)) tags.add("ビジネス");
-  if (/資金調達|出資|投資|シリーズ/.test(text)) tags.add("資金調達");
+  if (/ビジネス|事業|収益|マネタイズ|スポーツビジネス/.test(text)) tags.add("ビジネス");
+  if (/資金調達|出資|投資|シリーズ|ベンチャーキャピタル|\bVC\b/.test(text)) {
+    tags.add("資金調達");
+  }
   if (/提携|買収|パートナー/.test(text)) tags.add("提携");
+  if (/エンターテイ|エンタメ|entertainment/i.test(text)) tags.add("エンタメ");
+  if (/スタートアップ/.test(text)) tags.add("スタートアップ");
 
   for (const word of DOMAIN_HINTS) {
     if (text.includes(word) && tags.size < 4) tags.add(word);
@@ -85,7 +94,7 @@ function scoreArticle(article: ParsedAlertArticle, alertQuery: string): number {
   for (const word of DOMAIN_HINTS) {
     if (text.includes(word)) score += 3;
   }
-  if (/スポーツ/.test(alertQuery)) score += 8;
+  if (/スポーツ/.test(alertQuery) || /スポーツ/.test(text)) score += 8;
   for (const theme of ALERT_THEMES) {
     if (alertQuery.includes(theme) || text.includes(theme)) score += 6;
   }

@@ -3,7 +3,7 @@
  *
  * 毎朝9時（Asia/Tokyo）:
  *   1. Gmail の Google アラートを取り込み
- *   2. Vercel /api/ingest へ転送
+ *   2. Vercel /api/ingest へ転送（記事ごとに alertQuery を付与）
  *   3. Slack へ全件ダイジェスト通知
  *
  * 初回:
@@ -16,6 +16,23 @@ var ALERT_QUERY_UNREAD = 'from:googlealerts-noreply@google.com is:unread';
 var ALERT_QUERY_RECENT = 'from:googlealerts-noreply@google.com newer_than:7d';
 var TARGET_ARTICLES = 30;
 var MAX_THREADS = 50;
+
+/** ユーザー希望の Google アラートキーワード */
+var ALERT_KEYWORDS = [
+  'AI エンターテインメント',
+  'スポーツ AI',
+  'スポーツ Web3',
+  'スポーツ イノベーション',
+  'スポーツ スタートアップ',
+  'スポーツ テクノロジー',
+  'スポーツ ブロックチェーン',
+  'スポーツ マーケティング',
+  'スポーツ 新規事業',
+  'スポーツビジネス',
+  'ベンチャーキャピタル',
+  '資金調達',
+  '新規事業'
+];
 
 /* ========== 初回セットアップ ========== */
 
@@ -160,15 +177,16 @@ function forwardToIngest_(articles) {
     contentType: 'application/json',
     muteHttpExceptions: true,
     payload: JSON.stringify({
+      // 記事ごとに alertQuery を送る（バッチ先頭のキーワードで上書きしない）
       articles: articles.map(function (a) {
         return {
           title: a.title,
           url: a.url,
           snippet: a.snippet,
-          source: a.source
+          source: a.source,
+          alertQuery: a.alertQuery || 'スポーツ'
         };
-      }),
-      alertQuery: (articles[0] && articles[0].alertQuery) || 'スポーツ'
+      })
     })
   };
 
@@ -184,7 +202,27 @@ function forwardToIngest_(articles) {
 function extractAlertQuery_(subject) {
   var m = subject.match(/Google\s*アラート\s*[-–—]\s*(.+)$/i)
     || subject.match(/Google\s*Alert\s*[-–—]\s*(.+)$/i);
-  return m && m[1] ? clean_(m[1]) : 'スポーツ';
+  var raw = m && m[1] ? clean_(m[1]) : '';
+
+  // 希望キーワードに正規化
+  if (raw) {
+    for (var i = 0; i < ALERT_KEYWORDS.length; i++) {
+      if (raw === ALERT_KEYWORDS[i] || raw.indexOf(ALERT_KEYWORDS[i]) !== -1) {
+        return ALERT_KEYWORDS[i];
+      }
+    }
+    if (raw !== '今日のダイジェスト' && raw !== 'ダイジェスト' && raw !== 'スポーツ') {
+      return raw;
+    }
+  }
+
+  // 件名全体から希望キーワードを探す（長い語を優先）
+  var ranked = ALERT_KEYWORDS.slice().sort(function (a, b) { return b.length - a.length; });
+  for (var j = 0; j < ranked.length; j++) {
+    if (subject.indexOf(ranked[j]) !== -1) return ranked[j];
+  }
+
+  return 'スポーツ';
 }
 
 function parseGoogleAlert_(html, text) {

@@ -1,4 +1,6 @@
 import * as cheerio from "cheerio";
+import { ALERT_KEYWORDS, ALERT_QUERY_NOISE } from "./keywords";
+import { normalizeAlertQuery } from "./normalize-alert-query";
 
 export type ParsedAlertArticle = {
   title: string;
@@ -26,13 +28,37 @@ function extractAlertQuery(subject: string | undefined, html: string): string {
   if (subject) {
     const match = subject.match(/Google アラート\s*[-–—]\s*(.+)$/i)
       || subject.match(/Google Alert\s*[-–—]\s*(.+)$/i);
-    if (match?.[1]) return cleanText(match[1]);
+    if (match?.[1]) {
+      const fromSubject = cleanText(match[1]);
+      if (!isNoiseHeading(fromSubject)) {
+        return normalizeAlertQuery(fromSubject);
+      }
+    }
+    // 件名全体に希望キーワードが含まれる場合
+    for (const kw of [...ALERT_KEYWORDS].sort((a, b) => b.length - a.length)) {
+      if (subject.includes(kw)) return kw;
+    }
   }
 
   const $ = cheerio.load(html);
-  const heading = $("h2, h3").first().text();
-  if (heading) return cleanText(heading);
+  const heading = cleanText($("h2, h3").first().text());
+  if (heading && !isNoiseHeading(heading)) {
+    return normalizeAlertQuery(heading);
+  }
+
+  // HTML 内から希望キーワードを拾う
+  const bodyText = cleanText($.text()).slice(0, 2000);
+  for (const kw of [...ALERT_KEYWORDS].sort((a, b) => b.length - a.length)) {
+    if (bodyText.includes(kw)) return kw;
+  }
+
   return "スポーツ";
+}
+
+function isNoiseHeading(value: string): boolean {
+  const v = value.trim();
+  // 「スポーツ」単体はノイズだが「スポーツ AI」は希望ワード
+  return ALERT_QUERY_NOISE.some((n) => v === n);
 }
 
 

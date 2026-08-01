@@ -34,5 +34,7 @@ export type IngestPayload = {
     url: string;
     snippet?: string;
     source?: string;
+    /** 記事ごとの Google アラートキーワード */
+    alertQuery?: string;
   }>;
 };
