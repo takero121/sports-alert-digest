@@ -108,12 +108,15 @@ export function polishSummary(article: SummaryInput): string {
   return `「${title}」についての記事です。`;
 }
 
-/** 表示用見出し: 媒体名を除き、途切れ記号だけ落として全文を返す */
+/** 表示用見出し: 媒体名を絶対に残さず、途切れ記号も落とす */
 export function displayTitle(title: string, source = ""): string {
   return stripMediaSuffix(plainText(title), source)
+    .replace(/\s*[|｜]\s*.{1,60}$/u, "")
+    .replace(/\s*[-–—―－]\s*(?:CNET|BeInCrypto|PR\s*TIMES|Yahoo!?|エキサイト|innovaTopia|日本経済新聞|東洋経済|Bloomberg|TechCrunch|TradingKey|STARTUP\s*LOG)(?:\s*Japan)?(?:\s*オンライン)?\s*$/iu, "")
     .replace(/\s*\.{2,}\s*$/, "")
     .replace(/\s*…\s*$/, "")
     .replace(/\s*･･･\s*$/, "")
+    .replace(/\s*．．．\s*$/, "")
     .trim();
 }
 

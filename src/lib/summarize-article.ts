@@ -334,12 +334,20 @@ function resolveFullTitle(
   if (!page) return alert;
   if (page === alert) return alert;
 
-  if (looksTruncated(alert) && page.length >= alert.replace(/[….]+$/, "").length) {
-    if (titleOverlap(alert, page) >= 0.3) return page;
+  const alertCore = alert.replace(/[….．]{2,}$/u, "").replace(/…$/u, "").trim();
+
+  // アラート見出しが途切れているなら、ページ見出しを優先して全文を使う
+  if (looksTruncated(alert)) {
+    if (!looksTruncated(page) && titleOverlap(alertCore, page) >= 0.2) {
+      return page;
+    }
+    if (page.length > alertCore.length && titleOverlap(alertCore, page) >= 0.25) {
+      return page;
+    }
   }
 
-  // ページ見出しの方が長く、主題が一致していれば採用
-  if (page.length > alert.length + 8 && titleOverlap(alert, page) >= 0.4) {
+  // ページ見出しの方が明らかに長く、主題が一致していれば採用
+  if (!looksTruncated(page) && page.length > alert.length + 4 && titleOverlap(alert, page) >= 0.3) {
     return page;
   }
 
@@ -348,8 +356,9 @@ function resolveFullTitle(
 
 function looksTruncated(title: string): boolean {
   const t = title.trim();
-  if (/\.{2,}$|…$|･･･$/.test(t)) return true;
-  if (/[\s、のとをがにへはも]$/u.test(t)) return true;
+  if (/\.{2,}$|…$|･･･$|．．．$/.test(t)) return true;
+  // Googleアラート特有の途中切れ（助詞・読点で終わる）
+  if (/[\s、のとをがにへはもで]$/u.test(t)) return true;
   return false;
 }
 
