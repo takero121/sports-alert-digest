@@ -1,10 +1,13 @@
 import crypto from "crypto";
 import type { Article } from "./types";
 import { SERVICE_NAME, X_HANDLE } from "./keywords";
-import { buildSlackArticleText } from "./share-text";
+import { buildSlackBodyText, buildSlackTitleLine } from "./share-text";
 
-/** Slack Block Kit は1メッセージ最大50ブロック。要約全文のため件数は控えめに分割 */
-const ARTICLES_PER_MESSAGE = 8;
+/**
+ * Slack Block Kit は1メッセージ最大50ブロック。
+ * 記事ごとに title / body / actions / divider の4ブロックなので件数は控えめに。
+ */
+const ARTICLES_PER_MESSAGE = 6;
 
 export function isSlackConfigured(): boolean {
   return Boolean(process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID);
@@ -33,13 +36,20 @@ export function verifySlackRequest(
 }
 
 function articleBlocks(article: Article, index: number) {
-  const postText = buildSlackArticleText(article);
+  // 見出しと本文を別 section にして、Slack 側の途中切れを避ける
   return [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${index + 1}.*\n${postText}`,
+        text: buildSlackTitleLine(index, article.title),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: buildSlackBodyText(article),
       },
     },
     {

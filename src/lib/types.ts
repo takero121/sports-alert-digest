@@ -2,6 +2,8 @@ export type Article = {
   id: string;
   title: string;
   summary: string;
+  /** Googleアラート由来の元抜粋（要約で上書きしない） */
+  snippet?: string;
   url: string;
   source: string;
   alertQuery: string;

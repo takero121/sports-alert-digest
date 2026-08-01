@@ -52,18 +52,37 @@ export async function GET(request: Request) {
   }
 
   // 元記事を取得して要約してから Slack へ投稿
-  const articles = await enrichArticlesWithSourceSummaries(baseArticles);
-  for (const article of articles) {
+  const enriched = await enrichArticlesWithSourceSummaries(baseArticles);
+  for (const article of enriched) {
     article.shareText = buildShareText(article);
   }
 
   await saveArticleSummaries(
-    articles.map((a) => ({
+    enriched.map((a) => ({
       id: a.id,
+      title: a.title,
       summary: a.summary,
       summarizedFromArticle: a.summarizedFromArticle,
     })),
   );
+
+  // ゴミ要約（本文取得失敗＋弱いフォールバック）は Slack に出さない
+  const articles = enriched.filter(
+    (a) =>
+      a.summarizedFromArticle &&
+      a.summary.length >= 40 &&
+      /[。！？]/.test(a.summary) &&
+      !/についての記事です|について報じられています|詳細は元記事を/.test(a.summary),
+  );
+
+  if (articles.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      sent: false,
+      message: "No usable summaries to send",
+      enriched: enriched.length,
+    });
+  }
 
   const dateLabel = format(new Date(), "M月d日", { locale: ja });
   await sendDigestToSlack(articles, dateLabel);
@@ -76,6 +95,7 @@ export async function GET(request: Request) {
     sent: true,
     count: articles.length,
     summarizedFromArticle: fromArticle,
+    skipped: enriched.length - articles.length,
     ids: articles.map((a) => a.id),
   });
 }

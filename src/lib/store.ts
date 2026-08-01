@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import type { Article, DigestStore, IngestPayload } from "./types";
 import { parseGoogleAlertEmail } from "./parse-google-alert";
 import { enrichArticle } from "./rank";
+import { stripMediaSuffix } from "./fetch-article";
 import { buildShareText } from "./share-text";
 import { getRedis, STORE_KEY } from "./redis";
 
@@ -152,11 +153,12 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
       .replace(/\s+/g, " ")
       .trim();
 
+    const title = stripMediaSuffix(String(item.title || "").trim());
     const enriched = enrichArticle(
       {
-        title: item.title,
+        title,
         url,
-        snippet: snippet || item.title,
+        snippet: snippet || title,
         source: item.source || "unknown",
       },
       alertQuery,
@@ -164,8 +166,9 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
 
     const article: Article = {
       id: nanoid(10),
-      title: item.title,
+      title,
       summary: enriched.summary,
+      snippet: snippet || title,
       url,
       source: item.source || "unknown",
       alertQuery,
@@ -217,7 +220,7 @@ export async function markPostedToX(id: string): Promise<Article | null> {
 }
 
 export async function saveArticleSummaries(
-  updates: Array<Pick<Article, "id" | "summary" | "summarizedFromArticle">>,
+  updates: Array<Pick<Article, "id" | "summary" | "summarizedFromArticle"> & { title?: string }>,
 ): Promise<void> {
   if (!updates.length) return;
   const store = await readStore();
@@ -225,6 +228,7 @@ export async function saveArticleSummaries(
   for (const article of store.articles) {
     const patch = byId.get(article.id);
     if (!patch) continue;
+    if (patch.title) article.title = patch.title;
     article.summary = patch.summary;
     article.summarizedFromArticle = patch.summarizedFromArticle;
     article.shareText = buildShareText(article);

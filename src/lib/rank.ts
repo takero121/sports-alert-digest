@@ -113,10 +113,7 @@ export function buildSummary(article: ParsedAlertArticle, alertQuery: string): s
   }
 
   if (body.length < 28) {
-    const theme = tags.slice(0, 3).join("・") || "スポーツ";
-    body = `「${title}」について報じられています。${theme}の観点から注目される動きです。`;
-  } else if (tags.length > 0) {
-    body = `${body}注目テーマは${tags.slice(0, 3).join("・")}です。`;
+    body = `「${title}」についての記事です。`;
   }
 
   return body;

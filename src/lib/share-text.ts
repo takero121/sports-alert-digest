@@ -1,21 +1,23 @@
 import type { Article } from "./types";
 import { SERVICE_NAME } from "./keywords";
+import { stripMediaSuffix } from "./fetch-article";
 
 const SERVICE_TAG = `#${SERVICE_NAME.replace(/\s+/g, "")}`;
 
 type SummaryInput = Pick<Article, "title" | "summary" | "tags"> &
   Partial<Pick<Article, "source" | "alertQuery" | "summarizedFromArticle">>;
 
-/** X投稿用の短文 */
+/** X投稿用の短文（文字数制限があるため要約のみ短縮。見出しは全文） */
 export function buildShareText(article: Pick<Article, "title" | "summary" | "url" | "tags">): string {
   const tagLine = article.tags.length
     ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
     : "#スポーツ";
+  const title = displayTitle(article.title);
 
   return [
-    `【${SERVICE_NAME}】${plainText(article.title)}`,
+    `【${SERVICE_NAME}】${title}`,
     "",
-    trimText(plainText(article.summary), 120),
+    trimAtSentence(plainText(article.summary), 120),
     "",
     article.url,
     "",
@@ -24,22 +26,51 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
 }
 
 /**
- * Slack掲載用: 見出し + 要約文 + ハッシュタグ
- * 元記事要約済みならそのまま使い、未要約のときだけ整形フォールバックする
+ * Slack掲載用: 見出し全文 + 要約全文 + ハッシュタグ
+ * 媒体名は出さない。途中切断しない。
  */
 export function buildSlackArticleText(article: SummaryInput & Pick<Article, "url">): string {
-  const title = plainText(article.title);
-  const body = article.summarizedFromArticle
-    ? plainText(article.summary)
-    : polishSummary(article);
+  const title = displayTitle(article.title);
+  const cleaned = plainText(article.summary);
+  const body =
+    (article.summarizedFromArticle || isUsableSummary(cleaned)) &&
+    isUsableSummary(cleaned)
+      ? cleaned
+      : polishSummary(article);
   const tags = article.tags.length
     ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
     : "#スポーツ";
 
   return [
-    `*${title}*`,
+    `*${escapeMrkdwn(title)}*`,
     "",
-    body,
+    escapeMrkdwn(body),
+    "",
+    `${tags} ${SERVICE_TAG}`,
+    "",
+    `<${article.url}|元記事を開く>`,
+  ].join("\n");
+}
+
+/** Slack用: 見出しだけ（番号付き） */
+export function buildSlackTitleLine(index: number, title: string): string {
+  return `*${index + 1}. ${escapeMrkdwn(displayTitle(title))}*`;
+}
+
+/** Slack用: 本文・タグ・リンク（見出しなし） */
+export function buildSlackBodyText(article: SummaryInput & Pick<Article, "url">): string {
+  const cleaned = plainText(article.summary);
+  const body =
+    (article.summarizedFromArticle || isUsableSummary(cleaned)) &&
+    isUsableSummary(cleaned)
+      ? cleaned
+      : polishSummary(article);
+  const tags = article.tags.length
+    ? article.tags.map((t) => `#${t.replace(/\s+/g, "")}`).join(" ")
+    : "#スポーツ";
+
+  return [
+    escapeMrkdwn(body),
     "",
     `${tags} ${SERVICE_TAG}`,
     "",
@@ -49,7 +80,7 @@ export function buildSlackArticleText(article: SummaryInput & Pick<Article, "url
 
 export function buildDigestShareText(articles: Article[], dateLabel: string): string {
   const top = articles.slice(0, 3);
-  const lines = top.map((a, i) => `${i + 1}. ${a.title}`);
+  const lines = top.map((a, i) => `${i + 1}. ${displayTitle(a.title)}`);
   return [
     `【${SERVICE_NAME}】${dateLabel} のスポーツニュース`,
     "",
@@ -60,18 +91,35 @@ export function buildDigestShareText(articles: Article[], dateLabel: string): st
 }
 
 export function polishSummary(article: SummaryInput): string {
-  const title = plainText(article.title);
-  const themes =
-    article.tags.slice(0, 3).join("・") ||
-    plainText(article.alertQuery || "").replace(/^スポーツ\s*/, "") ||
-    "スポーツ";
-
+  const title = displayTitle(article.title);
   const body = plainText(article.summary);
-  if (body.length >= 40 && /[。！？]/.test(body) && !/<[a-z]|table|td/i.test(body)) {
+  if (isUsableSummary(body)) {
     return body;
   }
 
-  return `「${title}」について報じられています。${themes}の観点から注目される動きです。`;
+  return `「${title}」についての記事です。`;
+}
+
+/** 表示用見出し: 媒体名を除き、途切れ記号だけ落として全文を返す */
+export function displayTitle(title: string): string {
+  return stripMediaSuffix(plainText(title))
+    .replace(/\s*\.{2,}\s*$/, "")
+    .replace(/\s*…\s*$/, "")
+    .replace(/\s*･･･\s*$/, "")
+    .trim();
+}
+
+function isUsableSummary(body: string): boolean {
+  if (body.length < 40 || !/[。！？]/.test(body)) return false;
+  if (/<[a-z]|table|td|注目点:/i.test(body)) return false;
+  if (
+    /詳細は元記事を|注目|観点から|アクセスランキング|公式サイト：|ニュースまとめ/.test(
+      body,
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function plainText(text: string): string {
@@ -87,9 +135,21 @@ function plainText(text: string): string {
     .trim();
 }
 
-function trimText(text: string, max: number): string {
+/** X向け: 文末で収める（途中に … を差し込まない） */
+function trimAtSentence(text: string, max: number): string {
   const cleaned = plainText(text);
-  const chars = [...cleaned];
-  if (chars.length <= max) return cleaned;
-  return `${chars.slice(0, Math.max(1, max - 1)).join("")}…`;
+  if ([...cleaned].length <= max) return cleaned;
+  const sentences = cleaned.split(/(?<=[。！？])/).filter((s) => s.trim());
+  let out = "";
+  for (const s of sentences) {
+    const next = out + s;
+    if ([...next].length > max) break;
+    out = next;
+  }
+  if (out) return out.trim();
+  return cleaned;
+}
+
+function escapeMrkdwn(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

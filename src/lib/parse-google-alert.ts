@@ -96,7 +96,12 @@ export function parseGoogleAlertEmail(input: {
       }
     }
 
-    if (snippet.length > 220) snippet = `${snippet.slice(0, 217)}…`;
+    // 抜粋は文単位で収める（途中切断の … は付けない）
+    if (snippet.length > 400) {
+      const cut = snippet.slice(0, 400);
+      const end = Math.max(cut.lastIndexOf("。"), cut.lastIndexOf("！"), cut.lastIndexOf("？"));
+      snippet = end >= 40 ? cut.slice(0, end + 1) : cut;
+    }
     if (!snippet) snippet = title;
 
     seen.add(url);

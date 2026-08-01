@@ -1,6 +1,20 @@
 import type { Article } from "./types";
 import { SERVICE_NAME } from "./keywords";
 
+/** サムネ内に収まる範囲で文末まで出す（途中切断しない） */
+function fitSummaryForCard(summary: string, max = 180): string {
+  const text = String(summary || "").replace(/\s+/g, " ").trim();
+  if ([...text].length <= max) return text;
+  const sentences = text.split(/(?<=[。！？])/).filter((s) => s.trim());
+  let out = "";
+  for (const s of sentences) {
+    const next = out + s;
+    if ([...next].length > max) break;
+    out = next;
+  }
+  return out || text;
+}
+
 export function ArticleShareCard({ article }: { article: Article }) {
   return (
     <div
@@ -16,33 +30,26 @@ export function ArticleShareCard({ article }: { article: Article }) {
         fontFamily: "sans-serif",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center" }}>
         <div style={{ display: "flex", fontSize: 24, letterSpacing: 2, color: "#b8f34a" }}>
           {SERVICE_NAME}
         </div>
-        <div style={{ display: "flex", fontSize: 22, color: "#9db5a6" }}>{article.source}</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", fontSize: 22, color: "#b8f34a" }}>今日の注目</div>
-        <div style={{ display: "flex", fontSize: 48, fontWeight: 700, lineHeight: 1.2 }}>
+        <div style={{ display: "flex", fontSize: 44, fontWeight: 700, lineHeight: 1.25 }}>
           {article.title}
         </div>
         <div
           style={{
             display: "flex",
-            fontSize: 28,
+            fontSize: 26,
             color: "#c5d4cb",
-            lineHeight: 1.4,
-            maxWidth: 1000,
+            lineHeight: 1.45,
+            maxWidth: 1040,
           }}
         >
-          {article.summary.length > 90 ? `${article.summary.slice(0, 87)}…` : article.summary}
+          {fitSummaryForCard(article.summary)}
         </div>
       </div>
       <div style={{ display: "flex", gap: 12 }}>
