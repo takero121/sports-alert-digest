@@ -3,6 +3,9 @@ import { SERVICE_NAME } from "./keywords";
 
 const SERVICE_TAG = `#${SERVICE_NAME.replace(/\s+/g, "")}`;
 
+type SummaryInput = Pick<Article, "title" | "summary" | "tags"> &
+  Partial<Pick<Article, "source" | "alertQuery">>;
+
 /** X投稿用の短文 */
 export function buildShareText(article: Pick<Article, "title" | "summary" | "url" | "tags">): string {
   const tagLine = article.tags.length
@@ -24,9 +27,7 @@ export function buildShareText(article: Pick<Article, "title" | "summary" | "url
 /**
  * Slack掲載用: 見出し + 文章として成立する要約 + ハッシュタグ
  */
-export function buildSlackArticleText(
-  article: Pick<Article, "title" | "summary" | "url" | "tags" | "source" | "alertQuery">,
-): string {
+export function buildSlackArticleText(article: SummaryInput & Pick<Article, "url">): string {
   const title = plainText(article.title);
   const body = polishSummary(article);
   const tags = article.tags.length
@@ -57,19 +58,30 @@ export function buildDigestShareText(articles: Article[], dateLabel: string): st
 }
 
 /** 壊れた抜粋を、読みやすい日本語の要約文に整える */
-export function polishSummary(
-  article: Pick<Article, "title" | "summary" | "tags" | "source" | "alertQuery">,
-): string {
+export function polishSummary(article: SummaryInput): string {
   const title = plainText(article.title);
+  const themes =
+    article.tags.slice(0, 3).join("・") ||
+    plainText(article.alertQuery || "").replace(/^スポーツ\s*/, "") ||
+    "スポーツ";
+
   let body = plainText(article.summary)
     .replace(/（注目点:[^）]*）/g, " ")
     .replace(/<\/?[a-zA-Z][^>\s]*/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
-    .replace(/\.{2,}|…+/g, "。")
+    // 省略記号は句点にせず、不完全文を作らない
+    .replace(/\.{2,}|…+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  // 先頭の媒体名を除去
+  body = body
+    .replace(
+      /^(?:NIKKEI|PR TIMES|SmartNews|FNNプライムオンライン|HashHub Research|エキサイト|日本経済新聞|【NIKKEI COMPASS】)\s*/i,
+      "",
+    )
+    .replace(/^【[^】]{1,40}】\s*/, "")
+    .trim();
+
   if (article.source) {
     const source = plainText(article.source);
     if (source && body.toLowerCase().startsWith(source.toLowerCase())) {
@@ -77,46 +89,55 @@ export function polishSummary(
     }
   }
 
-  // タイトルの重複を除去
   if (body.startsWith(title)) {
     body = body.slice(title.length).replace(/^[\s\-|:：]+/, "").trim();
   }
 
-  // 文として切れる位置まで使う
-  const endMarks = ["。", "！", "？", ".", "!", "?"];
-  let lastEnd = -1;
-  for (const mark of endMarks) {
-    lastEnd = Math.max(lastEnd, body.lastIndexOf(mark));
-  }
-  if (lastEnd >= 28) {
-    body = body.slice(0, lastEnd + 1).trim();
-  } else if (body.length > 0) {
-    body = body
-      .replace(/(?:で|の|を|が|は|と|に|も|へ|や|から|まで|について|まとめ|お知らせ)\s*$/u, "")
-      .trim();
-    if (body.length >= 24 && !/[。！？.!?]$/.test(body)) {
-      body = `${body}。`;
+  const sentences = body
+    .split(/(?<=[。！？])/)
+    .map((s) => s.trim())
+    .filter((s) => isCompleteSentence(s));
+
+  if (sentences.length > 0) {
+    body = sentences[0];
+    if (
+      sentences[1] &&
+      [...body].length + [...sentences[1]].length <= 180 &&
+      isCompleteSentence(sentences[1])
+    ) {
+      body += sentences[1];
     }
+  } else {
+    body = "";
   }
 
-  // 短すぎる / 壊れている場合はタイトルから文章を作る
   if (!isReadableBlurb(body)) {
-    const themes =
-      article.tags.slice(0, 3).join("・") ||
-      plainText(article.alertQuery || "") ||
-      "スポーツ";
-    body = `「${title}」について報じられています。${themes}の観点から注目される動きです。`;
-  } else if (article.tags.length > 0 && !/注目/.test(body)) {
-    body = `${body}注目テーマは${article.tags.slice(0, 3).join("・")}です。`;
+    return `「${title}」について報じられています。${themes}の観点から注目される動きです。`;
   }
 
-  return body;
+  return `${ensurePeriod(body)}${themes}がテーマのニュースです。`;
+}
+
+function isCompleteSentence(sentence: string): boolean {
+  if ([...sentence].length < 22) return false;
+  if (!/[。！？]$/.test(sentence)) return false;
+  const core = sentence.replace(/[。！？]$/, "").trim();
+  if (/[やのをがはとにもへでて、,]$/u.test(core)) return false;
+  if (/<[a-z]|table|td|tr/i.test(sentence)) return false;
+  // カギ括弧が閉じていない
+  if ((core.match(/「/g) || []).length !== (core.match(/」/g) || []).length) return false;
+  return true;
+}
+
+function ensurePeriod(text: string): string {
+  return /[。！？]$/.test(text) ? text : `${text}。`;
 }
 
 function isReadableBlurb(text: string): boolean {
-  if (!text || [...text].length < 28) return false;
+  if (!text || [...text].length < 22) return false;
   if (/<[a-z]|table|td|tr|nbsp/i.test(text)) return false;
-  if ((text.match(/[ぁ-んァ-ヶ一-龥A-Za-z0-9]/g) || []).length < 20) return false;
+  if (!/[。！？]/.test(text)) return false;
+  if ((text.match(/[ぁ-んァ-ヶ一-龥]/g) || []).length < 10) return false;
   return true;
 }
 
