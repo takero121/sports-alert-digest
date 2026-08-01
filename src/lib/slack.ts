@@ -55,7 +55,7 @@ function articleBlocks(article: Article, index: number) {
         {
           type: "button",
           action_id: "open_article",
-          text: { type: "plain_text", text: "記事を開く", emoji: true },
+          text: { type: "plain_text", text: "元記事を開く", emoji: true },
           url: article.url,
         },
       ],

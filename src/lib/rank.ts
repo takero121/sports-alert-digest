@@ -96,23 +96,42 @@ function scoreArticle(article: ParsedAlertArticle, alertQuery: string): number {
 }
 
 export function buildSummary(article: ParsedAlertArticle, alertQuery: string): string {
-  // Slack では全文を出すので、アラート本文は長めに保持する
-  const base = sanitizeSnippet(article.snippet || article.title);
-  const compact = base.length > 1200 ? `${base.slice(0, 1197)}…` : base;
   const tags = detectTags(`${article.title} ${article.snippet} ${alertQuery}`);
-  const why =
-    tags.length > 0 ? `注目点: ${tags.join(" / ")}` : "スポーツ関連の注目ニュース";
-  return `${compact}（${why}）`;
+  const base = sanitizeSnippet(article.snippet || "");
+  const title = sanitizeSnippet(article.title);
+
+  let body = base;
+  if (body.toLowerCase().startsWith(title.toLowerCase())) {
+    body = body.slice(title.length).replace(/^[\s\-|:：]+/, "").trim();
+  }
+
+  const end = Math.max(body.lastIndexOf("。"), body.lastIndexOf("！"), body.lastIndexOf("？"));
+  if (end >= 28) {
+    body = body.slice(0, end + 1);
+  } else if (body.length >= 24 && !/[。！？]$/.test(body)) {
+    body = `${body.replace(/(?:で|の|を|が|は|と|に|について)\s*$/u, "").trim()}。`;
+  }
+
+  if (body.length < 28) {
+    const theme = tags.slice(0, 3).join("・") || "スポーツ";
+    body = `「${title}」について報じられています。${theme}の観点から注目される動きです。`;
+  } else if (tags.length > 0) {
+    body = `${body}注目テーマは${tags.slice(0, 3).join("・")}です。`;
+  }
+
+  return body;
 }
 
 function sanitizeSnippet(text: string): string {
   return String(text || "")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
+    .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\.{2,}|…+/g, "。")
     .replace(/\s+/g, " ")
     .trim();
 }
