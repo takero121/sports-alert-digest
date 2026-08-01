@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const articles = await getDigestArticles(5);
+  const articles = await getDigestArticles();
   if (articles.length === 0) {
     return NextResponse.json({ ok: true, sent: false, message: "No articles to send" });
   }

@@ -14,7 +14,7 @@ export default async function HomePage() {
         initialLastIngestAt={store.lastIngestAt}
       />
       <footer className="site-footer">
-        毎日のSlack通知と @Takeroishi へのX投稿に対応。セットアップは README を参照。
+        スポーツニュースダイジェスト — 毎日のSlack通知とX投稿に対応。セットアップは README を参照。
       </footer>
     </main>
   );

@@ -1,10 +1,10 @@
 /**
- * SIDELINE Gmail Bridge
+ * スポーツニュースダイジェスト Gmail Bridge
  *
  * 毎朝9時（Asia/Tokyo）:
  *   1. Gmail の Google アラートを取り込み
  *   2. Vercel /api/ingest へ転送
- *   3. Slack ダイジェスト通知
+ *   3. Slack へ全件ダイジェスト通知
  *
  * 初回:
  *   1. setupScriptProperties を実行
@@ -147,7 +147,7 @@ function forwardToIngest_(articles) {
           source: a.source
         };
       }),
-      alertQuery: (articles[0] && articles[0].alertQuery) || 'スポーツ イノベーション'
+      alertQuery: (articles[0] && articles[0].alertQuery) || 'スポーツ'
     })
   };
 
@@ -163,7 +163,7 @@ function forwardToIngest_(articles) {
 function extractAlertQuery_(subject) {
   var m = subject.match(/Google\s*アラート\s*[-–—]\s*(.+)$/i)
     || subject.match(/Google\s*Alert\s*[-–—]\s*(.+)$/i);
-  return m && m[1] ? clean_(m[1]) : 'スポーツ イノベーション';
+  return m && m[1] ? clean_(m[1]) : 'スポーツ';
 }
 
 function parseGoogleAlert_(html, text) {

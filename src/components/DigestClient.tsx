@@ -6,6 +6,7 @@ import { ja } from "date-fns/locale";
 import type { Article } from "@/lib/types";
 import { ShareActions } from "./ShareActions";
 import { buildDigestShareText } from "@/lib/share-text";
+import { SERVICE_NAME, X_HANDLE } from "@/lib/keywords";
 
 type Props = {
   initialArticles: Article[];
@@ -96,10 +97,10 @@ export function DigestClient({
     <div className="digest">
       <section className="hero">
         <div className="hero-glow" aria-hidden />
-        <p className="eyebrow">スポーツイノベーション · Google アラート連動</p>
-        <h1 className="brand">SIDELINE</h1>
+        <p className="eyebrow">Google アラート連動 · 毎朝お届け</p>
+        <h1 className="brand">{SERVICE_NAME}</h1>
         <p className="lede">
-          スポーツ×テクノロジーのニュースを毎日集め、Slack通知とX投稿までつなぎます。
+          スポーツを軸に、イノベーション・AI・テクノロジーなどのニュースを毎日集め、Slack通知とX投稿までつなぎます。
         </p>
         <div className="hero-meta">
           <span>
@@ -142,8 +143,10 @@ export function DigestClient({
 
       <section className="list-section">
         <div className="section-head">
-          <h2>今見るべきイノベーション</h2>
-          <p>スコアが高い順。Slackのボタンから @Takeroishi へワンクリック投稿できます。</p>
+          <h2>今日のニュース</h2>
+          <p>
+            スコアが高い順。Slackのボタンから @{X_HANDLE} へワンクリック投稿できます。
+          </p>
         </div>
 
         {articles.length === 0 ? (

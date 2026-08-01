@@ -33,7 +33,7 @@ export async function renderArticleSharePng(article: Article): Promise<Buffer> {
   return Buffer.from(ab);
 }
 
-/** @Takeroishi へ要約文＋サムネ画像を投稿 */
+/** X へ要約文＋サムネ画像を投稿（スポーツニュースダイジェスト） */
 export async function postArticleToX(article: Article): Promise<{
   tweetId: string;
   url: string;

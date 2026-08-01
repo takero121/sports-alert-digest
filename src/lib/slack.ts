@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import type { Article } from "./types";
-import { X_HANDLE } from "./keywords";
+import { SERVICE_NAME, X_HANDLE } from "./keywords";
+import { buildSlackArticleText } from "./share-text";
+
+/** Slack Block Kit は1メッセージ最大50ブロック。記事ごとに約3ブロック使う */
+const ARTICLES_PER_MESSAGE = 12;
 
 export function isSlackConfigured(): boolean {
   return Boolean(process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID);
@@ -29,13 +33,13 @@ export function verifySlackRequest(
 }
 
 function articleBlocks(article: Article, index: number) {
-  const tags = article.tags.length ? article.tags.join(" · ") : "スポーツイノベーション";
+  const postText = buildSlackArticleText(article);
   return [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${index + 1}. <${article.url}|${article.title}>*\n${article.summary}\n_${tags}_ · 優先度 ${article.score}`,
+        text: `*${index + 1}.*\n${postText}`,
       },
     },
     {
@@ -60,37 +64,52 @@ function articleBlocks(article: Article, index: number) {
   ];
 }
 
-export function buildDigestBlocks(articles: Article[], dateLabel: string) {
-  const header = [
+export function buildDigestBlocks(
+  articles: Article[],
+  dateLabel: string,
+  options?: {
+    part?: number;
+    totalParts?: number;
+    startIndex?: number;
+    totalCount?: number;
+  },
+) {
+  const part = options?.part ?? 1;
+  const totalParts = options?.totalParts ?? 1;
+  const startIndex = options?.startIndex ?? 0;
+  const totalCount = options?.totalCount ?? articles.length;
+  const partLabel = totalParts > 1 ? `（${part}/${totalParts}）` : "";
+
+  const intro =
+    totalParts > 1
+      ? part === 1
+        ? `取得ニュース全 *${totalCount}* 件を通知します（${part}/${totalParts}）。ボタン1つで *@${X_HANDLE}* に投稿できます。`
+        : `続き（${part}/${totalParts}） / 全 ${totalCount} 件`
+      : `取得ニュース *${totalCount}* 件を全件通知。ボタン1つで *@${X_HANDLE}* に要約＋サムネを投稿できます。`;
+
+  const body = articles.flatMap((article, i) => articleBlocks(article, startIndex + i));
+
+  return [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: `SIDELINE ${dateLabel} スポーツイノベーション`,
+        text: `${SERVICE_NAME} ${dateLabel}${partLabel}`,
         emoji: true,
       },
     },
     {
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `今日の注目ニュース *${articles.length}* 件。ボタン1つで *@${X_HANDLE}* に要約＋サムネを投稿できます。`,
-      },
+      text: { type: "mrkdwn", text: intro },
     },
     { type: "divider" },
-  ];
-
-  const body = articles.flatMap((article, i) => articleBlocks(article, i));
-
-  return [
-    ...header,
     ...body,
     {
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: "投稿には X API 連携が必要です · SIDELINE",
+          text: `投稿には X API 連携が必要です · ${SERVICE_NAME}`,
         },
       ],
     },
@@ -104,21 +123,37 @@ export async function sendDigestToSlack(articles: Article[], dateLabel: string):
     throw new Error("SLACK_BOT_TOKEN and SLACK_CHANNEL_ID are required");
   }
 
-  const blocks = buildDigestBlocks(articles, dateLabel);
-  const text = `SIDELINE ${dateLabel}: スポーツイノベーション ${articles.length}件`;
+  const chunks: Article[][] = [];
+  for (let i = 0; i < articles.length; i += ARTICLES_PER_MESSAGE) {
+    chunks.push(articles.slice(i, i + ARTICLES_PER_MESSAGE));
+  }
 
-  const res = await fetch("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({ channel, text, blocks }),
-  });
+  const totalParts = Math.max(chunks.length, 1);
 
-  const data = (await res.json()) as { ok: boolean; error?: string };
-  if (!data.ok) {
-    throw new Error(`Slack chat.postMessage failed: ${data.error || "unknown"}`);
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const startIndex = i * ARTICLES_PER_MESSAGE;
+    const blocks = buildDigestBlocks(chunk, dateLabel, {
+      part: i + 1,
+      totalParts,
+      startIndex,
+      totalCount: articles.length,
+    });
+    const text = `${SERVICE_NAME} ${dateLabel}: ${articles.length}件（${i + 1}/${totalParts}）`;
+
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({ channel, text, blocks }),
+    });
+
+    const data = (await res.json()) as { ok: boolean; error?: string };
+    if (!data.ok) {
+      throw new Error(`Slack chat.postMessage failed: ${data.error || "unknown"}`);
+    }
   }
 }
 

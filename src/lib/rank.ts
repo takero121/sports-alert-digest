@@ -1,4 +1,5 @@
 import type { ParsedAlertArticle } from "./parse-google-alert";
+import { ALERT_THEMES } from "./keywords";
 
 const HIGH_IMPACT = [
   "イノベーション",
@@ -28,6 +29,8 @@ const HIGH_IMPACT = [
   "Web3",
   "NFT",
   "ブロックチェーン",
+  "マーケティング",
+  "ブランディング",
   "ファンエンゲージメント",
   "スポーツテック",
   "SportsTech",
@@ -57,8 +60,11 @@ function detectTags(text: string): string[] {
   if (/テクノロジー|テック|SportsTech|スポーツテック/.test(text)) tags.add("テクノロジー");
   if (/AI|人工知能|機械学習|生成AI/.test(text)) tags.add("AI");
   if (/新規事業|スタートアップ|起業/.test(text)) tags.add("新規事業");
+  if (/ブロックチェーン|Web3|NFT|メタバース/.test(text)) tags.add("ブロックチェーン");
+  if (/マーケティング|広告|ブランディング|ファンエンゲージ/.test(text)) {
+    tags.add("マーケティング");
+  }
   if (/ビジネス|事業|収益|マネタイズ/.test(text)) tags.add("ビジネス");
-  if (/Web3|NFT|ブロックチェーン|メタバース/.test(text)) tags.add("Web3");
   if (/資金調達|出資|投資|シリーズ/.test(text)) tags.add("資金調達");
   if (/提携|買収|パートナー/.test(text)) tags.add("提携");
 
@@ -80,8 +86,8 @@ function scoreArticle(article: ParsedAlertArticle, alertQuery: string): number {
     if (text.includes(word)) score += 3;
   }
   if (/スポーツ/.test(alertQuery)) score += 8;
-  if (/イノベーション|テクノロジー|AI|Web3|ビジネス|新規事業/.test(alertQuery)) {
-    score += 10;
+  for (const theme of ALERT_THEMES) {
+    if (alertQuery.includes(theme) || text.includes(theme)) score += 6;
   }
   if (article.title.length >= 20 && article.title.length <= 70) score += 4;
   if (article.snippet.length >= 40) score += 3;
@@ -94,9 +100,7 @@ export function buildSummary(article: ParsedAlertArticle, alertQuery: string): s
   const compact = base.length > 120 ? `${base.slice(0, 117)}…` : base;
   const tags = detectTags(`${article.title} ${article.snippet} ${alertQuery}`);
   const why =
-    tags.length > 0
-      ? `注目点: ${tags.join(" / ")}`
-      : "スポーツイノベーション関連の速報";
+    tags.length > 0 ? `注目点: ${tags.join(" / ")}` : "スポーツ関連の注目ニュース";
   return `${compact}（${why}）`;
 }
 

@@ -1,4 +1,5 @@
 import type { Article } from "./types";
+import { SERVICE_NAME } from "./keywords";
 
 export function ArticleShareCard({ article }: { article: Article }) {
   return (
@@ -22,16 +23,14 @@ export function ArticleShareCard({ article }: { article: Article }) {
           alignItems: "center",
         }}
       >
-        <div style={{ display: "flex", fontSize: 26, letterSpacing: 6, color: "#b8f34a" }}>
-          SIDELINE
+        <div style={{ display: "flex", fontSize: 24, letterSpacing: 2, color: "#b8f34a" }}>
+          {SERVICE_NAME}
         </div>
         <div style={{ display: "flex", fontSize: 22, color: "#9db5a6" }}>{article.source}</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <div style={{ display: "flex", fontSize: 22, color: "#b8f34a" }}>
-          スポーツイノベーション
-        </div>
-        <div style={{ display: "flex", fontSize: 52, fontWeight: 700, lineHeight: 1.2 }}>
+        <div style={{ display: "flex", fontSize: 22, color: "#b8f34a" }}>今日の注目</div>
+        <div style={{ display: "flex", fontSize: 48, fontWeight: 700, lineHeight: 1.2 }}>
           {article.title}
         </div>
         <div
@@ -82,11 +81,11 @@ export function DigestShareCard({ articles }: { articles: Article[] }) {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", fontSize: 28, letterSpacing: 6, color: "#b8f34a" }}>
-          SIDELINE
+        <div style={{ display: "flex", fontSize: 24, letterSpacing: 2, color: "#b8f34a" }}>
+          {SERVICE_NAME}
         </div>
-        <div style={{ display: "flex", fontSize: 54, fontWeight: 700, lineHeight: 1.15 }}>
-          スポーツイノベーション速報
+        <div style={{ display: "flex", fontSize: 48, fontWeight: 700, lineHeight: 1.15 }}>
+          今日のスポーツニュース
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -102,7 +101,7 @@ export function DigestShareCard({ articles }: { articles: Article[] }) {
         ))}
       </div>
       <div style={{ display: "flex", fontSize: 22, color: "#9db5a6" }}>
-        毎日のスポーツイノベーション・ダイジェスト
+        毎朝の{SERVICE_NAME}
       </div>
     </div>
   );

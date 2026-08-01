@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ingestPayload } from "@/lib/store";
 
-/** ローカル確認用: スポーツイノベーション系のアラート風 HTML を取り込む */
+/** ローカル確認用: スポーツ×各テーマのアラート風 HTML を取り込む */
 export async function POST() {
   const html = `
     <html><body>
@@ -14,10 +14,10 @@ export async function POST() {
         <span>sportstech-lab.example</span>
       </div>
       <div>
-        <a href="https://www.google.com/url?url=https://example.com/web3-ticketing">
-          スポーツビジネス×Web3　電子チケットにNFT特典を標準搭載へ
+        <a href="https://www.google.com/url?url=https://example.com/sports-marketing">
+          スポーツマーケティング最前線　データ活用でファン体験を設計
         </a>
-        <div>新規事業としてファンクラブ連携を強化。二次流通と特典設計が焦点。</div>
+        <div>観戦データとSNS分析を組み合わせ、クラブの新規事業にもつながる取り組み。</div>
         <span>biz-innovation.example</span>
       </div>
     </body></html>

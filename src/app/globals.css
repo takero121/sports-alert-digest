@@ -101,11 +101,11 @@ main {
 
 .brand {
   margin: 0;
-  font-family: var(--font-display), Impact, sans-serif;
-  font-size: clamp(4.2rem, 14vw, 7.5rem);
-  line-height: 0.9;
+  font-family: var(--font-body), "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: clamp(1.85rem, 5.5vw, 2.75rem);
+  line-height: 1.25;
   letter-spacing: 0.04em;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 .lede {

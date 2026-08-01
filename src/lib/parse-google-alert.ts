@@ -35,6 +35,7 @@ function extractAlertQuery(subject: string | undefined, html: string): string {
   return "スポーツ";
 }
 
+
 /**
  * Google アラートの HTML メールから記事一覧を抜き出す。
  */

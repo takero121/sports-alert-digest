@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
+import { SERVICE_NAME } from "@/lib/keywords";
 
 const display = Bebas_Neue({
   weight: "400",
@@ -15,9 +16,9 @@ const body = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "SIDELINE | スポーツイノベーション速報",
+  title: `${SERVICE_NAME} | 毎朝のスポーツニュース`,
   description:
-    "スポーツイノベーションのニュースを毎日取得し、Slack通知とX（@Takeroishi）へのワンクリック投稿までつなぐダイジェスト。",
+    "スポーツ×イノベーション/AI/テクノロジーなどのニュースを毎日取得し、Slack通知とXへのワンクリック投稿までつなぐダイジェスト。",
 };
 
 export default function RootLayout({

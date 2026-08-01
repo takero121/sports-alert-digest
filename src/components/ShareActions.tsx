@@ -42,7 +42,7 @@ export function ShareActions({ article }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `sideline-${article.id}.png`;
+    a.download = `sports-news-digest-${article.id}.png`;
     a.click();
     URL.revokeObjectURL(url);
     setImageReady(true);

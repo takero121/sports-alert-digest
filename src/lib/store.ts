@@ -25,15 +25,15 @@ function createSeedStore(): DigestStore {
       tags: ["AI", "資金調達", "テクノロジー"],
     },
     {
-      title: "JクラブがWeb3ファンクラブを正式ローンチ　NFT会員証で観戦体験を拡張",
+      title: "Jクラブがブロックチェーン会員証を導入　ファンマーケティングを強化",
       summary:
-        "デジタル会員証と特典連動でファンエンゲージメントを強化。国内クラブの先進事例として注目。（注目点: Web3 / ビジネス）",
-      url: "https://example.com/jclub-web3",
+        "デジタル会員証と特典連動でファンエンゲージメントを強化。国内クラブの先進事例として注目。（注目点: ブロックチェーン / マーケティング）",
+      url: "https://example.com/jclub-blockchain",
       source: "sportsbiz.example",
-      alertQuery: "スポーツ Web3",
+      alertQuery: "スポーツ ブロックチェーン",
       receivedAt: now,
       score: 88,
-      tags: ["Web3", "ビジネス", "スポーツ"],
+      tags: ["ブロックチェーン", "マーケティング", "スポーツ"],
     },
     {
       title: "大手メーカーがスポーツ新規事業室を新設　ウェアラブル×ヘルスケアに注力",
@@ -122,7 +122,7 @@ export async function ingestPayload(payload: IngestPayload): Promise<{
     ? new Date(payload.emailDate).toISOString()
     : new Date().toISOString();
 
-  let alertQuery = payload.alertQuery || "スポーツ イノベーション";
+  let alertQuery = payload.alertQuery || "スポーツ";
   let incoming = payload.articles || [];
 
   if (!incoming.length && (payload.html || payload.text)) {
@@ -218,15 +218,19 @@ export async function markSlackDigestSent(): Promise<void> {
   await writeStore(store);
 }
 
-/** 直近24時間の記事をスコア順。なければ全体トップを返す */
-export async function getDigestArticles(limit = 5): Promise<Article[]> {
+/**
+ * 直近24時間に取得した記事をすべて返す（スコア順）。
+ * 24時間以内が0件なら、保存済み記事をすべて返す。
+ */
+export async function getDigestArticles(limit?: number): Promise<Article[]> {
   const store = await readStore();
   const since = Date.now() - 24 * 60 * 60 * 1000;
   const recent = store.articles.filter((a) => +new Date(a.receivedAt) >= since);
   const pool = recent.length > 0 ? recent : store.articles;
-  return [...pool]
-    .sort((a, b) => b.score - a.score || +new Date(b.receivedAt) - +new Date(a.receivedAt))
-    .slice(0, limit);
+  const sorted = [...pool].sort(
+    (a, b) => b.score - a.score || +new Date(b.receivedAt) - +new Date(a.receivedAt),
+  );
+  return typeof limit === "number" ? sorted.slice(0, limit) : sorted;
 }
 
 export async function resetToSeed(): Promise<DigestStore> {
